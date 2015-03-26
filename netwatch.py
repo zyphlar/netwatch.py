@@ -9,7 +9,7 @@
 import curses
 import curses.wrapper
 # Timer
-from gi.repository import GObject as gobject
+from gi.repository import GLib, GObject
 # Pinging
 import subprocess
 # Regex
@@ -27,6 +27,7 @@ class Pinger:
   icon_height = 22
 
   def ping(self):
+    self.draw()
     ping = subprocess.Popen(
         ["ping", "-c", "1", host],
         stdout = subprocess.PIPE,
@@ -35,15 +36,21 @@ class Pinger:
     out, error = ping.communicate()
     m = re.search('time=(.*) ms', out)
     if error or m == None:
-      label = "PING FAIL"
       self.log_ping(-1)
     else:
       latency = "%.2f" % float(m.group(1))
-      label = latency+" ms"
       self.log_ping(latency)
-    self.stdscr.addstr(2,1,"Ping: "+label, curses.color_pair(2))
+    if float(latency) == -1:
+      self.stdscr.addstr(self.count,1,"Ping: FAIL", curses.color_pair(1))
+    else:
+      self.stdscr.addstr(self.count,1,"Ping: "+latency, curses.color_pair(2))
+    self.count += 1
+    GObject.timeout_add_seconds(self.timeout, self.ping)
+    self.draw()
+
+  def draw(self):
+   # for index, ping in enumerate(self.ping_log):
     self.stdscr.refresh()
-    gobject.timeout_add_seconds(self.timeout, self.ping)
 
   def log_ping(self, value):
     self.ping_log.append(float(value))
@@ -58,7 +65,10 @@ class Pinger:
     # start the ping process
     self.stdscr = stdscr
     self.timeout = ping_frequency
+    self.count = 1
     self.ping()
+    self.loop = GLib.MainLoop()
+    self.loop.run()
 
 
 def main(stdscr):
@@ -66,10 +76,7 @@ def main(stdscr):
   curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK);
   curses.init_pair(2, curses.COLOR_GREEN, curses.COLOR_BLACK);
 
-  stdscr.addstr(1,1,"Hello, world.", curses.color_pair(1))
   pinger = Pinger(stdscr)
-  stdscr.refresh()
-  stdscr.getch()
 
 if __name__ == '__main__':
   curses.wrapper(main)
