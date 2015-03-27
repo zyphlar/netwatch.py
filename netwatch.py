@@ -21,14 +21,19 @@ encoding = locale.getpreferredencoding()
 
 # Variables
 internet_host = "8.8.8.8"
+router_host = "192.168.1.1"
 ping_frequency = 5
 
 class Pinger:
   internet_log = []
+  router_log = []
 
   def run(self):
     internet_latency = self.ping(internet_host,self.internet_log)
     self.draw("Internet:",self.internet_log,internet_latency,0)
+
+    router_latency = self.ping(router_host,self.router_log)
+    self.draw("Router:",self.router_log,router_latency,2)
 
     # Schedule next run
     GObject.timeout_add_seconds(self.timeout, self.run)
@@ -101,27 +106,30 @@ class Pinger:
     return {'graph': graph, 'color': color, 'subjective': subjective, 'ping': float(ping)}
 
   def __init__(self, stdscr):
+ 
+    # Initialize color pairs
+    curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
+    curses.init_pair(2, curses.COLOR_GREEN, curses.COLOR_BLACK)
+    curses.init_pair(3, curses.COLOR_WHITE, curses.COLOR_BLACK)
+
+    # Hide cursor
+    curses.curs_set(0)
+
     # initialize screen and parameters
     self.stdscr = stdscr
     self.window_size = stdscr.getmaxyx() # returns an array [height,width]
     self.ping_log_max_size = self.window_size[1] # max width
     self.timeout = ping_frequency
-
+ 
     # start the ping process
     self.run()
 
+    # Keep running until ctrl+c
     self.loop = GLib.MainLoop()
     self.loop.run()
 
-
 def main(stdscr):
-
-  # Initialize color pairs
-  curses.init_pair(1, curses.COLOR_RED, curses.COLOR_BLACK)
-  curses.init_pair(2, curses.COLOR_GREEN, curses.COLOR_BLACK)
-  curses.init_pair(3, curses.COLOR_WHITE, curses.COLOR_BLACK)
-
-  # Create runtime class
+  # Initialize runtime class
   pinger = Pinger(stdscr)
 
 if __name__ == '__main__':
