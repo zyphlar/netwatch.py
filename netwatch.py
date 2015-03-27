@@ -33,10 +33,9 @@ class Pinger:
     # Run network scan every 12 runs (60 seconds)
     if self.count%12 == 0:
       self.stdscr.clear() # clear window every scan run (not every run)
-      self.subnet = IPNetwork(self.router_host+"/24")
 
-      scan_results = self.scan_network(self.subnet,"-T4",False,"80")
-      self.draw_scan(scan_results,4)
+      scan_results = self.scan_network(self.router_host+"/24")
+      self.draw_scan(scan_results,6)
       self.count = 1
 
     # Increment counter for scan
@@ -48,7 +47,7 @@ class Pinger:
 
     # Draw router graph
     router_latency = self.ping(self.router_host,self.router_log)
-    self.draw_log("Router:",self.router_host,self.router_log,router_latency,2)
+    self.draw_log("Router:",self.router_host,self.router_log,router_latency,3)
 
     # Schedule next run
     GObject.timeout_add_seconds(self.timeout, self.run)
@@ -98,8 +97,17 @@ class Pinger:
       self.stdscr.addstr(line+1,idx,entry['graph'].encode(encoding), entry['color'])
 
   def draw_scan(self,scan,line):
-    for idx,entry in enumerate(scan):
-      self.stdscr.addstr(line+idx,0,str(entry),self.COL_MUTE)
+    self.stdscr.addstr(line,0,"WiFi:", self.COL_DEFAULT)
+
+    count = 1
+    for host, detail in scan:
+#      if detail['state'] == "up":
+#        color = self.COL_GOOD
+#      else:
+#        color = self.COL_BAD
+      color = self.COL_MUTE
+      self.stdscr.addstr(line+count,0,str(host),color)
+      count += 1
 
   def interpret_ping(self, ping):
     ping = float(ping)
@@ -125,13 +133,6 @@ class Pinger:
       subjective = "Poor"
     return {'graph': graph, 'color': color, 'subjective': subjective, 'ping': float(ping)}
 
-#  def find_router_ip(self):
-#    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-#    s.connect((self.internet_host,80))
-#    my_ip = s.getsockname()[0]
-#    s.close()
-#    return my_ip
-
   def get_default_gateway_linux(self):
     # Read the default gateway directly from /proc.
     with open("/proc/net/route") as fh:
@@ -142,52 +143,12 @@ class Pinger:
 
         return str(socket.inet_ntoa(struct.pack("<L", int(fields[2], 16))))
 
-  def scan_network(self,subnet,speed ="-T4",noPing = False,portRange = "1-65535"):
-      """
-      The function NmapPortServiceScan is responsible for scanning a host
-      with Nmap using the correct arguments
-      @variable host: The IP address of the host
-      @variable speed: The Nmap Scan speed
-      @variable noPing: True if no ICMP ping false otherwise
-      @variable portRange: TCP port range to scan
-      @return lines: The host port scan results
-      """
+  def scan_network(self,subnet):
+      nm = nmap.PortScanner()
+      nm.scan(hosts=subnet, arguments='-n -sP')
+      hosts_list = [(x, nm[x]['status']) for x in nm.all_hosts()]
 
-      ipNet = subnet
-  
-      #Creating a list of hosts
-      hosts = list(ipNet)
-  
-      #Removing the net and broad address if prefix is under 31 bits
-      if len(hosts) > 2:
-        hosts.remove(ipNet.broadcast)
-        hosts.remove(ipNet.network)
-  
-      #Creating a list of hosts in string format.
-      hostList = [str(host) for host in hosts]
-
-      for host in hostList:
-
-        lines = ""
- 
-        #Creating the port scanner
-        nm = nmap.PortScanner()
- 
-        #Nmap Args
-        args = "-sV %s " %speed
- 
-        if noPing:
-            args += "-Pn"
- 
-        #Scan
-        nm.scan(str(host),portRange,arguments=args) #"1-65535"
- 
-        #Formating
-        csv = nm.csv()
-        lineList = csv.split("\r\n")
-        lineList = lineList[1:]
- 
-        return lineList
+      return hosts_list
 
   def __init__(self, stdscr):
     # Parameters
