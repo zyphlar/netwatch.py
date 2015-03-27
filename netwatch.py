@@ -13,6 +13,8 @@ from gi.repository import GLib, GObject
 # Pinging
 import subprocess
 import socket, struct
+from netaddr import *
+import nmap
 # Regex
 import re
 # Unicode
@@ -30,10 +32,13 @@ class Pinger:
     self.stdscr.clear() # clear window during each run
 
     internet_latency = self.ping(self.internet_host,self.internet_log)
-    self.draw("Internet:",self.internet_host,self.internet_log,internet_latency,0)
+    self.draw_log("Internet:",self.internet_host,self.internet_log,internet_latency,0)
 
     router_latency = self.ping(self.router_host,self.router_log)
-    self.draw("Router:",self.router_host,self.router_log,router_latency,2)
+    self.draw_log("Router:",self.router_host,self.router_log,router_latency,2)
+
+    scan_results = self.scan_network("-T4",False,"80")
+    self.draw_scan(scan_results,4)
 
     # Schedule next run
     GObject.timeout_add_seconds(self.timeout, self.run)
@@ -68,7 +73,7 @@ class Pinger:
 
     return latency
 
-  def draw(self,title,subtitle,log,latency,line):
+  def draw_log(self,title,subtitle,log,latency,line):
  
     # Draw internet heading on specified line
     self.stdscr.addstr(line,0,title, self.COL_DEFAULT)
@@ -81,6 +86,10 @@ class Pinger:
     # Draw graph on next line
     for idx,entry in enumerate(log):
       self.stdscr.addstr(line+1,idx,entry['graph'].encode(encoding), entry['color'])
+
+  def draw_scan(self,scan,line):
+    for idx,entry in enumerate(scan):
+      self.stdscr.addstr(line+idx,0,str(idx)+str(entry),self.COL_DEFAULT)
 
   def interpret_ping(self, ping):
     ping = float(ping)
@@ -121,7 +130,54 @@ class Pinger:
         if fields[1] != '00000000' or not int(fields[3], 16) & 2:
           continue
 
-        return socket.inet_ntoa(struct.pack("<L", int(fields[2], 16)))
+        return str(socket.inet_ntoa(struct.pack("<L", int(fields[2], 16))))
+
+  def scan_network(self,speed ="-T4",noPing = False,portRange = "1-65535"):
+      """
+      The function NmapPortServiceScan is responsible for scanning a host
+      with Nmap using the correct arguments
+      @variable host: The IP address of the host
+      @variable speed: The Nmap Scan speed
+      @variable noPing: True if no ICMP ping false otherwise
+      @variable portRange: TCP port range to scan
+      @return lines: The host port scan results
+      """
+
+      ipNet = IPNetwork(self.router_host)
+  
+      #Creating a list of hosts
+      hosts = list(ipNet)
+  
+      #Removing the net and broad address if prefix is under 31 bits
+      if len(hosts) > 2:
+        hosts.remove(ipNet.broadcast)
+        hosts.remove(ipNet.network)
+  
+      #Creating a list of hosts in string format.
+      hostList = [str(host) for host in hosts]
+
+      for host in hosts:
+
+        lines = ""
+ 
+        #Creating the port scanner
+        nm = nmap.PortScanner()
+ 
+        #Nmap Args
+        args = "-sV %s " %speed
+ 
+        if noPing:
+            args += "-Pn"
+ 
+        #Scan
+        nm.scan(str(host),portRange,arguments=args) #"1-65535"
+ 
+        #Formating
+        csv = nm.csv()
+        lineList = csv.split("\r\n")
+        lineList = lineList[1:]
+ 
+        return lineList
 
   def __init__(self, stdscr):
     # Parameters
