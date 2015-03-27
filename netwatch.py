@@ -27,18 +27,28 @@ encoding = locale.getpreferredencoding()
 class Pinger:
   internet_log = []
   router_log = []
+  count = 11 # start at 11 so the scan will run next time
 
   def run(self):
-    self.stdscr.clear() # clear window during each run
+    # Run network scan every 12 runs (60 seconds)
+    if self.count%12 == 0:
+      self.stdscr.clear() # clear window every scan run (not every run)
+      self.subnet = IPNetwork(self.router_host+"/24")
 
+      scan_results = self.scan_network(self.subnet,"-T4",False,"80")
+      self.draw_scan(scan_results,4)
+      self.count = 1
+
+    # Increment counter for scan
+    self.count += 1
+
+    # Draw internet graph
     internet_latency = self.ping(self.internet_host,self.internet_log)
     self.draw_log("Internet:",self.internet_host,self.internet_log,internet_latency,0)
 
+    # Draw router graph
     router_latency = self.ping(self.router_host,self.router_log)
     self.draw_log("Router:",self.router_host,self.router_log,router_latency,2)
-
-    scan_results = self.scan_network("-T4",False,"80")
-    self.draw_scan(scan_results,4)
 
     # Schedule next run
     GObject.timeout_add_seconds(self.timeout, self.run)
@@ -89,7 +99,7 @@ class Pinger:
 
   def draw_scan(self,scan,line):
     for idx,entry in enumerate(scan):
-      self.stdscr.addstr(line+idx,0,str(idx)+str(entry),self.COL_DEFAULT)
+      self.stdscr.addstr(line+idx,0,str(entry),self.COL_MUTE)
 
   def interpret_ping(self, ping):
     ping = float(ping)
@@ -132,7 +142,7 @@ class Pinger:
 
         return str(socket.inet_ntoa(struct.pack("<L", int(fields[2], 16))))
 
-  def scan_network(self,speed ="-T4",noPing = False,portRange = "1-65535"):
+  def scan_network(self,subnet,speed ="-T4",noPing = False,portRange = "1-65535"):
       """
       The function NmapPortServiceScan is responsible for scanning a host
       with Nmap using the correct arguments
@@ -143,7 +153,7 @@ class Pinger:
       @return lines: The host port scan results
       """
 
-      ipNet = IPNetwork(self.router_host)
+      ipNet = subnet
   
       #Creating a list of hosts
       hosts = list(ipNet)
@@ -156,7 +166,7 @@ class Pinger:
       #Creating a list of hosts in string format.
       hostList = [str(host) for host in hosts]
 
-      for host in hosts:
+      for host in hostList:
 
         lines = ""
  
